@@ -1,0 +1,67 @@
+# ============================================================
+# DONNÉES — JAMAIS sur Git (RGPD : données clients Maeva)
+# ============================================================
+data/
+*.csv
+*.xlsx
+*.parquet
+*.feather
+
+# ============================================================
+# MODÈLES & ARTEFACTS (lourds, régénérables)
+# ============================================================
+models/
+*.joblib
+*.pkl
+*.h5
+
+# Figures générées (optionnel : décommente si tu ne veux pas les versionner)
+# figures/
+
+# ============================================================
+# CREDENTIALS & SECRETS — JAMAIS sur Git
+# ============================================================
+credentials/
+*.json
+!requirements*.json          # garde les json de config légitimes si besoin
+service_account*.json
+.env
+*.key
+
+# ============================================================
+# ENVIRONNEMENT PYTHON
+# ============================================================
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.Python
+build/
+dist/
+
+# ============================================================
+# JUPYTER / NOTEBOOKS
+# ============================================================
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+# Sorties de notebooks (optionnel) : décommente pour ne pousser que le code
+# *.ipynb
+
+# ============================================================
+# IDE / ÉDITEURS
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ============================================================
+# OS
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
