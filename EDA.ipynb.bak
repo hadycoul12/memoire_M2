@@ -1341,6 +1341,32 @@
   },
   {
    "cell_type": "code",
+   "execution_count": 10,
+   "id": "6f5aa16b",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "cond_annulation\n",
+       "Flexi            147578\n",
+       "Flexi+             9478\n",
+       "NoFlex            20058\n",
+       "NoFlex (<J30)    133748\n",
+       "Name: count, dtype: int64"
+      ]
+     },
+     "execution_count": 10,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df['cond_annulation'].value_counts().sort_index()"
+   ]
+  },
+  {
+   "cell_type": "code",
    "execution_count": 11,
    "metadata": {},
    "outputs": [
@@ -1918,7 +1944,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 6. La condition d'annulation (Flex) — variable structurelle clé\n",
+    "## 5. La condition d'annulation (Flex) — variable structurelle clé\n",
     "On attend un gradient : plus la couverture est forte, plus on annule."
    ]
   },
@@ -2006,7 +2032,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 7. Le canal de vente"
+    "## 6. Le canal de vente"
    ]
   },
   {
@@ -2063,7 +2089,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 8. Saisonnalité & destination"
+    "## 7. Saisonnalité & destination"
    ]
   },
   {
@@ -2178,7 +2204,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 9. Variables numériques de contexte"
+    "## 8. Variables numériques de contexte"
    ]
   },
   {
@@ -2246,7 +2272,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 10. Couverture email (CRM) — la contrainte Batch\n",
+    "## 9. Couverture email (CRM) — la contrainte Batch\n",
     "Rappel : Batch ne couvre que ~7 mois, donc une minorité de dossiers a un historique email."
    ]
   },
@@ -2335,7 +2361,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 11. ★ ANALYSE CENTRALE : l'email chez les clients NON couverts\n",
+    "## 10. ★ ANALYSE CENTRALE : l'email chez les clients NON couverts\n",
     "C'est le cœur du mémoire : chez ceux qui perdent leur argent en annulant (non assurés), l'engagement email discrimine-t-il l'annulation ?"
    ]
   },
@@ -2398,7 +2424,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 12. Corrélations & force du signal"
+    "## 11. Matrice de corrélation (variables numériques)"
    ]
   },
   {
@@ -2467,225 +2493,9 @@
   },
   {
    "cell_type": "markdown",
-   "id": "551b15bb",
    "metadata": {},
    "source": [
-    "### Force du signal — quelles variables discriminent l'annulation ?\n",
-    "\n",
-    "La matrice ci-dessus ne couvre que les variables numériques. On mesure ici\n",
-    "l'association de **chaque** variable avec la cible : **V de Cramér** (catégorielles)\n",
-    "et **|corrélation|** (numériques), pour un classement unique.\n",
-    "\n",
-    "⚠️ Une association très forte (proche de 1) peut trahir une **fuite de données**\n",
-    "(variable renseignée *après* l'annulation) — à inspecter avant de modéliser."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "e7dc39e0",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "from scipy.stats import chi2_contingency\n",
-    "from matplotlib.patches import Patch\n",
-    "\n",
-    "def cramers_v(x, y):\n",
-    "    \"\"\"V de Cramér corrigé du biais (Bergsma) entre deux variables catégorielles.\"\"\"\n",
-    "    tab = pd.crosstab(x, y)\n",
-    "    chi2 = chi2_contingency(tab)[0]\n",
-    "    n = tab.to_numpy().sum(); r, k = tab.shape\n",
-    "    phi2 = chi2 / n\n",
-    "    phi2c = max(0, phi2 - (k - 1) * (r - 1) / (n - 1))\n",
-    "    rc = r - (r - 1) ** 2 / (n - 1); kc = k - (k - 1) ** 2 / (n - 1)\n",
-    "    d = min(kc - 1, rc - 1)\n",
-    "    return np.sqrt(phi2c / d) if d > 0 else 0.0\n",
-    "\n",
-    "exclure = {'y_annulation', 'dossier_cle', 'dossier_etat', 'date_resa'}\n",
-    "cat_cols = [c for c in df.columns if c not in exclure\n",
-    "            and not pd.api.types.is_numeric_dtype(df[c]) and df[c].nunique() <= 50]\n",
-    "num_cols = [c for c in df.columns if c not in exclure\n",
-    "            and pd.api.types.is_numeric_dtype(df[c])]\n",
-    "\n",
-    "lignes = [(c, 'catégorielle', cramers_v(df[c].astype(str), df['y_annulation'])) for c in cat_cols]\n",
-    "lignes += [(c, 'numérique', abs(df[c].corr(df['y_annulation']))) for c in num_cols]\n",
-    "force = (pd.DataFrame(lignes, columns=['variable', 'type', 'force'])\n",
-    "           .sort_values('force', ascending=False).reset_index(drop=True))\n",
-    "\n",
-    "print(\"=== FORCE D'ASSOCIATION AVEC L'ANNULATION ===\")\n",
-    "print(force.head(20).to_string(index=False))\n",
-    "suspects = force[force['force'] > 0.5]['variable'].tolist()\n",
-    "if suspects:\n",
-    "    print(f\"\\n⚠️ Association tres forte (fuite possible, a verifier) : {suspects}\")\n",
-    "\n",
-    "top = force.head(15).iloc[::-1]\n",
-    "fig, ax = plt.subplots(figsize=(9, 6))\n",
-    "ax.barh(top['variable'], top['force'],\n",
-    "        color=[C_PURP if t == 'catégorielle' else C_BLUE for t in top['type']])\n",
-    "ax.set_xlabel(\"Force d'association avec l'annulation\")\n",
-    "ax.set_title(\"Pouvoir discriminant des variables (V de Cramér / |corrélation|)\")\n",
-    "ax.legend(handles=[Patch(color=C_PURP, label='catégorielle (V de Cramér)'),\n",
-    "                   Patch(color=C_BLUE, label='numérique (|corrélation|)')], loc='lower right')\n",
-    "plt.tight_layout(); plt.savefig('figures/11_force_signal.png', dpi=150); plt.show()"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "id": "7a50f01c",
-   "metadata": {},
-   "source": [
-    "## 13. Où se concentrent les annulations (volume, pas seulement taux)\n",
-    "\n",
-    "Un taux élevé sur un petit segment pèse moins qu'un taux moyen sur un gros\n",
-    "volume. On croise les deux pour cibler l'action là où elle a le plus d'impact."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "a4b51a04",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# Scatter volume x taux par canal (taille = nb d'annulations)\n",
-    "g = df.groupby('canal')['y_annulation'].agg(volume='count', taux='mean', annulations='sum')\n",
-    "g['taux'] = g['taux'] * 100\n",
-    "fig, ax = plt.subplots(figsize=(9, 6))\n",
-    "ax.scatter(g['volume'], g['taux'],\n",
-    "           s=(g['annulations'] / g['annulations'].max() * 800) + 30,\n",
-    "           alpha=0.6, color=C_ANNUL, edgecolor='white')\n",
-    "for name, row in g.iterrows():\n",
-    "    ax.annotate(str(name)[:14], (row['volume'], row['taux']),\n",
-    "                fontsize=8, xytext=(5, 3), textcoords='offset points')\n",
-    "ax.axhline(df['y_annulation'].mean() * 100, ls='--', color='grey', label='taux moyen')\n",
-    "ax.set_xlabel('Volume de dossiers'); ax.set_ylabel(\"Taux d'annulation (%)\")\n",
-    "ax.set_title(\"Concentration du risque par canal (taille = nb d'annulations)\")\n",
-    "ax.legend(); plt.tight_layout(); plt.savefig('figures/12_concentration.png', dpi=150); plt.show()\n",
-    "\n",
-    "# Top segments condition x canal en annulations ABSOLUES\n",
-    "combo = (df.groupby(['cond_annulation', 'canal'])['y_annulation']\n",
-    "           .agg(volume='count', annulations='sum', taux='mean'))\n",
-    "combo = combo[combo['volume'] >= 200]\n",
-    "combo['taux'] = (combo['taux'] * 100).round(1)\n",
-    "print(\"=== TOP 10 SEGMENTS (condition x canal) EN ANNULATIONS ABSOLUES ===\")\n",
-    "print(combo.sort_values('annulations', ascending=False).head(10).to_string())"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "id": "57f7abd9",
-   "metadata": {},
-   "source": [
-    "## 14. Non-linéarité : taux d'annulation par tranche\n",
-    "\n",
-    "Le taux d'annulation n'évolue pas linéairement avec l'anticipation ou la durée —\n",
-    "ce qui justifie de **discrétiser** ces variables (ex. `anticipation_tranche` du\n",
-    "modèle)."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "37c753d4",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "fig, axes = plt.subplots(1, 2, figsize=(15, 5))\n",
-    "for ax, col, lab in [(axes[0], 'anticipation_jours', 'Anticipation (jours)'),\n",
-    "                     (axes[1], 'duree_sejour', 'Durée du séjour (nuits)')]:\n",
-    "    d = df[df[col].notna()].copy()\n",
-    "    d['tr'] = pd.qcut(d[col].clip(lower=0), q=10, duplicates='drop')\n",
-    "    t = d.groupby('tr')['y_annulation'].mean() * 100\n",
-    "    ax.plot(range(len(t)), t.values, marker='o', color=C_ANNUL, lw=2)\n",
-    "    ax.axhline(df['y_annulation'].mean() * 100, ls='--', color='grey', label='taux moyen')\n",
-    "    ax.set_xticks(range(len(t)))\n",
-    "    ax.set_xticklabels([f'{iv.left:.0f}–{iv.right:.0f}' for iv in t.index],\n",
-    "                       rotation=45, ha='right', fontsize=8)\n",
-    "    ax.set_title(f\"Taux d'annulation par décile — {lab}\")\n",
-    "    ax.set_ylabel(\"Taux d'annulation (%)\"); ax.legend()\n",
-    "plt.tight_layout(); plt.savefig('figures/13_taux_par_tranche.png', dpi=150); plt.show()"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "id": "20150aa2",
-   "metadata": {},
-   "source": [
-    "## 15. Interaction assurance × anticipation\n",
-    "\n",
-    "L'effet du délai de réservation dépend-il de la couverture Flex ? Cette\n",
-    "interaction motive directement la variable dérivée `assure_x_anticip` du modèle."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "2e5fc937",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "d = df.copy()\n",
-    "d['tranche_antic'] = pd.qcut(d['anticipation_jours'].clip(lower=0), q=5, duplicates='drop')\n",
-    "piv = (d.pivot_table(index='est_assure_annulation', columns='tranche_antic',\n",
-    "                     values='y_annulation', aggfunc='mean') * 100).round(1)\n",
-    "piv.index = ['Non couvert', 'Couvert']\n",
-    "fig, ax = plt.subplots(figsize=(10, 3.6))\n",
-    "sns.heatmap(piv, annot=True, fmt='.1f', cmap='Reds',\n",
-    "            cbar_kws={'label': \"taux d'annulation (%)\"}, ax=ax)\n",
-    "ax.set_title(\"Taux d'annulation : assurance × tranche d'anticipation\")\n",
-    "ax.set_xlabel(\"Tranche d'anticipation (jours)\"); ax.set_ylabel('')\n",
-    "plt.tight_layout(); plt.savefig('figures/14_interaction_flex_antic.png', dpi=150); plt.show()\n",
-    "print(piv)"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "id": "a29ed3d0",
-   "metadata": {},
-   "source": [
-    "## 16. Panier / prix — engagement financier\n",
-    "\n",
-    "Le montant payé est un signal d'engagement, et relie l'EDA à l'estimation du CA\n",
-    "à risque (page *Impact* de l'application). Les avoirs (prix ≤ 0) sont exclus."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "856fd28f",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "mask = df['prix_total_ttc'] > 0\n",
-    "prix = df.loc[mask, 'prix_total_ttc']\n",
-    "print(f\"Prix total TTC (avoirs exclus) — médiane {prix.median():.0f} € · \"\n",
-    "      f\"moyenne {prix.mean():.0f} € · CA total {prix.sum()/1e6:.1f} M€\")\n",
-    "\n",
-    "fig, axes = plt.subplots(1, 2, figsize=(15, 5))\n",
-    "plafond = prix.quantile(0.99)\n",
-    "for y, c, lab in [(0, C_MAINT, 'Maintenu'), (1, C_ANNUL, 'Annulé')]:\n",
-    "    axes[0].hist(prix[df.loc[mask, 'y_annulation'] == y].clip(upper=plafond),\n",
-    "                 bins=50, alpha=0.55, color=c, label=lab, density=True)\n",
-    "axes[0].set_xlabel('Prix total TTC (€, 99e pct)'); axes[0].set_ylabel('Densité')\n",
-    "axes[0].set_title('Distribution du panier : annulés vs maintenus'); axes[0].legend()\n",
-    "\n",
-    "d = df[mask].copy(); d['tr'] = pd.qcut(d['prix_total_ttc'], q=8, duplicates='drop')\n",
-    "t = d.groupby('tr')['y_annulation'].mean() * 100\n",
-    "axes[1].plot(range(len(t)), t.values, marker='o', color=C_ANNUL, lw=2)\n",
-    "axes[1].axhline(df['y_annulation'].mean() * 100, ls='--', color='grey', label='taux moyen')\n",
-    "axes[1].set_xticks(range(len(t)))\n",
-    "axes[1].set_xticklabels([f'{iv.left:.0f}–{iv.right:.0f}' for iv in t.index],\n",
-    "                        rotation=45, ha='right', fontsize=8)\n",
-    "axes[1].set_title(\"Taux d'annulation par tranche de prix\")\n",
-    "axes[1].set_ylabel(\"Taux d'annulation (%)\"); axes[1].legend()\n",
-    "plt.tight_layout(); plt.savefig('figures/15_prix.png', dpi=150); plt.show()"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 17. Synthèse EDA"
+    "## 12. Synthèse EDA"
    ]
   },
   {
@@ -2735,15 +2545,12 @@
    ]
   },
   {
-   "cell_type": "markdown",
-   "id": "25a1ccc2",
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "374cfaa1",
    "metadata": {},
-   "source": [
-    "## 18. Exports — dataset propre & échantillon\n",
-    "\n",
-    "Sauvegarde du dataset nettoyé (`dataset_annulation_clean.csv`), consommé\n",
-    "ensuite par `modele_v2.ipynb`."
-   ]
+   "outputs": [],
+   "source": []
   },
   {
    "cell_type": "code",
