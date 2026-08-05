@@ -27,8 +27,6 @@
     "- **Modèle A** : features structurelles uniquement (canal, Flex, anticipation, fidélité…)\n",
     "- **Modèle B** : features structurelles + features email (ouvertures, clics, désabonnements…)\n",
     "\n",
-    "> ⚙️ Les variables structurelles **dérivées** (`assure_x_anticip`, `est_solo`, `anticipation_tranche`) sont **recréées** (section 2), à l'identique de `modele_v2`, pour que le Modèle A soit complet — condition d'une comparaison équitable.\n",
-    "\n",
     "Si PR-AUC(B) > PR-AUC(A) de manière significative, l'email apporte un signal additionnel.  \n",
     "Sinon, les variables structurelles suffisent — résultat tout aussi intéressant scientifiquement.\n",
     "\n",
@@ -39,6 +37,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
+    "---\n",
     "## 1. Chargement et filtrage du sous-ensemble CRM\n",
     "\n",
     "Je charge le dataset nettoyé produit par `EDA.ipynb` et je filtre uniquement les dossiers ayant un historique email dans Batch (`est_dans_crm=1`). C'est sur cette population que la comparaison A vs B a du sens — inutile de tester l'apport email sur des dossiers qui n'en ont pas."
@@ -76,63 +75,10 @@
   },
   {
    "cell_type": "markdown",
-   "id": "59ce3015",
    "metadata": {},
    "source": [
-    "## 2. Feature engineering — recréation des variables dérivées\n",
-    "\n",
-    "Pour une comparaison **équitable**, le Modèle A doit disposer de *toutes* les\n",
-    "variables structurelles. Or les features dérivées (`assure_x_anticip`,\n",
-    "`est_solo`, `anticipation_tranche`) ne sont créées que dans `modele_v2.ipynb`.\n",
-    "Je les **recrée ici à l'identique** — sinon le Modèle A est artificiellement\n",
-    "affaibli et l'apport de l'email s'en trouve **surestimé**."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "5ddaaf20",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# ═══════════════════════════════════════════════════════════════\n",
-    "# Recréation des features dérivées — IDENTIQUE à modele_v2.ipynb\n",
-    "# (sans elles, le Modèle A est amputé -> apport email surestimé)\n",
-    "# ═══════════════════════════════════════════════════════════════\n",
-    "# Plafonnement de la fidélité (comme modele_v2)\n",
-    "df_crm['nb_dossiers_anterieurs'] = df_crm['nb_dossiers_anterieurs'].clip(upper=10)\n",
-    "\n",
-    "# a) Anticipation en tranches\n",
-    "df_crm['anticipation_tranche'] = pd.cut(\n",
-    "    df_crm['anticipation_jours'],\n",
-    "    bins=[-1, 7, 30, 90, 180, 99999],\n",
-    "    labels=['derniere_minute', 'court_30j', 'moyen_90j', 'long_180j', 'tres_long']\n",
-    ").astype(str)\n",
-    "\n",
-    "# b) Interaction assurance × anticipation\n",
-    "df_crm['assure_x_anticip'] = (\n",
-    "    df_crm['est_assure_annulation'] * df_crm['anticipation_jours'].clip(upper=365)\n",
-    ")\n",
-    "\n",
-    "# c) Voyageur solo (1 adulte, 0 mineur)\n",
-    "df_crm['est_solo'] = (\n",
-    "    (df_crm['dossier_nb_pax_adultes'] == 1) & (df_crm['nb_mineur'] == 0)\n",
-    ").astype(int)\n",
-    "\n",
-    "print(\"✔ Features dérivées recréées (test équitable) :\")\n",
-    "for f in ['anticipation_tranche', 'assure_x_anticip', 'est_solo']:\n",
-    "    ok = f in df_crm.columns\n",
-    "    extra = ''\n",
-    "    if f == 'anticipation_tranche':\n",
-    "        extra = f\" — modalités : {sorted(df_crm[f].unique())}\"\n",
-    "    print(f\"  - {f:22} {'OK' if ok else 'MANQUANTE'}{extra}\")"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 3. Vérification du signal email\n",
+    "---\n",
+    "## 2. Vérification du signal email\n",
     "\n",
     "Avant de construire les modèles, je vérifie que les features email ont effectivement de la variance dans ce sous-ensemble. Sur le dataset global, 90% des dossiers ont tout à 0 pour l'email — ici, la situation devrait être différente puisque ces clients ont reçu des campagnes.\n",
     "\n",
@@ -191,7 +137,8 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 4. Définition des deux groupes de features\n",
+    "---\n",
+    "## 3. Définition des deux groupes de features\n",
     "\n",
     "Le protocole est simple : deux modèles identiques (même algorithme, mêmes hyperparamètres, même split), la seule différence étant les features en entrée.\n",
     "\n",
@@ -254,7 +201,8 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 5. Entraînement et comparaison des deux modèles\n",
+    "---\n",
+    "## 4. Entraînement et comparaison des deux modèles\n",
     "\n",
     "Protocole identique au modèle global :\n",
     "- Split stratifié 80/20\n",
@@ -415,7 +363,8 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 6. Courbes ROC et Précision-Rappel comparatives\n",
+    "---\n",
+    "## 5. Courbes ROC et Précision-Rappel comparatives\n",
     "\n",
     "Les deux courbes côte à côte permettent de visualiser si l'ajout des features email déplace la courbe du Modèle B au-dessus de celle du Modèle A. Sur la courbe PR (droite), même un petit écart vertical est significatif dans un contexte déséquilibré."
    ]
@@ -475,7 +424,8 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 7. Interprétabilité SHAP — Position des features email\n",
+    "---\n",
+    "## 6. Interprétabilité SHAP — Position des features email\n",
     "\n",
     "L'analyse SHAP sur le Modèle B permet de répondre à une question précise : **où se classent les features email dans le ranking d'importance ?**\n",
     "\n",
@@ -545,7 +495,8 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 8. Test de significativité (bootstrap)\n",
+    "---\n",
+    "## 7. Test de significativité (bootstrap)\n",
     "\n",
     "Le delta PR-AUC observé entre les modèles A et B pourrait être dû au hasard de l'échantillonnage. Pour le vérifier, je fais un **test bootstrap** :\n",
     "- Je rééchantillonne le test set 1 000 fois (tirage avec remise)\n",
@@ -630,7 +581,8 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 9. Synthèse et conclusion\n",
+    "---\n",
+    "## 8. Synthèse et conclusion\n",
     "\n",
     "Cette section résume l'ensemble des résultats de l'analyse exploratoire et formule la réponse à la problématique du mémoire concernant l'apport des signaux email."
    ]
