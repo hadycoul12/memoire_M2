@@ -1,123 +1,117 @@
-# Scoring prédictif du risque d'annulation des réservations
+# Modélisation et analyse exploratoire, scoring du risque d'annulation
 
-Projet de mémoire — **Mastère 2 DIA Paris** · Alternance chez **Maeva** (Groupe Pierre & Vacances).
+Ce dossier regroupe l'ensemble du travail data du mémoire : l'analyse exploratoire des données, la construction et l'évaluation du modèle de prédiction, ainsi que l'étude de l'apport des signaux d'engagement email.
 
-Modèle d'apprentissage supervisé estimant, dès la réservation, le **risque d'annulation** d'un dossier, à partir de ses caractéristiques structurelles (canal de vente, condition d'annulation Flex) et du comportement email du client (CRM).
+Le projet a été réalisé dans le cadre de mon mémoire de Master 2 Data et Intelligence Artificielle (Nexa Digital School), en alternance chez Maeva (groupe Pierre et Vacances Center Parcs).
 
----
+L'objectif est d'estimer, dès la réservation, la probabilité qu'un dossier soit annulé, à partir de ses caractéristiques structurelles (canal de vente, condition tarifaire, anticipation) et du comportement email du client.
 
-## Problématique
+## Prérequis
 
-Dans quelle mesure peut-on prédire, dès la réservation, le risque d'annulation d'un dossier à partir de ses caractéristiques structurelles (canal, condition Flex) ? Et au-delà de ces variables déterminantes mais déjà connues de l'entreprise, l'engagement email apporte-t-il un pouvoir prédictif additionnel permettant d'identifier les **annulations évitables** — celles de clients non couverts qu'une action de rétention ciblée pourrait prévenir ?
+- **Python 3.10 ou une version plus récente**
+- **Jupyter**, ou **Visual Studio Code** avec les extensions Python et Jupyter (recommandé)
+- Environ **1 Go d'espace disque** pour l'environnement virtuel et les dépendances
+- Les fichiers de données dans le dossier `data/` (voir la section Données)
 
----
+Pour vérifier votre version de Python :
 
-## Données
-
-Trois tables de l'entrepôt BigQuery (projet `groupe-lfdnas`) :
-
-| Source | Granularité | Apport |
-|--------|-------------|--------|
-| `dossiers_marketing` | 1 ligne / dossier | Cible, canal, condition d'annulation, contexte séjour |
-| `behavior` (Batch) | 1 ligne / événement email | Engagement email (clics, ouvertures, désabonnements) |
-| `produit` | n lignes / dossier | Détection de l'option « Tarif Flex » |
-
-- **Cible** : `y_annulation` = 1 si le dossier est annulé, 0 sinon.
-- **Périmètre** : conditions d'annulation propres à Maeva (Flexi, Flexi+, NoFlex, NoFlex <J30) ; dossiers RESA/ANNULE ; séjour déjà commencé (anti-censure).
-- **Anti-fuite** : le comportement email n'est agrégé que sur les **90 jours précédant** la réservation.
-- **Volume** : ~297 600 dossiers, taux d'annulation 7,13 %.
-
-> ⚠️ Les données contiennent des informations clients : elles **ne sont jamais versionnées** (voir `.gitignore`). Le travail en local se fait sur un CSV **anonymisé** (colonne email supprimée).
-
----
-
-## Structure du projet
-
+```bash
+python --version
 ```
-memoire_annulation/
-├── data/                          # CSV (ignoré par Git — RGPD)
-│   └── dataset_annulation_anon.csv
-├── figures/                       # graphiques générés par les notebooks
-├── models/                        # modèles sérialisés (ignoré par Git)
-├── sql/
-│   └── v_dataset_annulation.sql   # construction de la vue BigQuery
-├── export_bigquery.py             # export de la vue vers CSV
-├── eda_annulation.ipynb           # analyse exploratoire
-├── modelisation_annulation.ipynb  # feature engineering + 3 modèles + SHAP
-├── requirements.txt
-├── .gitignore
-└── README.md
-```
-
----
 
 ## Installation
 
+### 1. Récupérer le projet et se placer dans le dossier
+
 ```bash
-# 1. Cloner le repo
-git clone <url-du-repo-prive>
-cd memoire_annulation
+cd memoire_M2
+```
 
-# 2. Créer l'environnement virtuel
+### 2. Créer et activer un environnement virtuel
+
+```bash
 python -m venv .venv
-# Windows :
-.venv\Scripts\activate
-# Mac / Linux :
-source .venv/bin/activate
+```
 
-# 3. Installer les dépendances
+```bash
+# Windows (PowerShell)
+.venv\Scripts\activate
+
+# macOS ou Linux
+source .venv/bin/activate
+```
+
+### 3. Installer les dépendances
+
+```bash
 pip install -r requirements.txt
 ```
 
----
+Les versions sont volontairement figées (notamment scikit-learn 1.5.0), afin de garantir que le modèle sauvegardé se recharge sans avertissement de compatibilité. L'installation comprend aussi `ipykernel`, nécessaire pour exécuter les notebooks.
 
-## Utilisation
+## Authentification
 
-### 1. Export des données (sur l'environnement professionnel uniquement)
+Les notebooks s'exécutent localement et ne demandent aucun identifiant. La connexion par mot de passe (`maeva` / `maeva2026`) concerne uniquement l'application Streamlit, livrée séparément.
 
-L'accès BigQuery se fait via l'authentification utilisateur (aucune clé secrète) :
+## Exécution des notebooks
 
-```bash
-gcloud auth application-default login
-python export_bigquery.py
+### Choisir le bon noyau (important)
+
+Dans VSCode, ouvrez un notebook puis, en haut à droite, cliquez sur le sélecteur de noyau et choisissez l'environnement **`.venv`** que vous venez de créer. C'est l'erreur la plus fréquente : un noyau pointant vers un autre environnement provoque des `ModuleNotFoundError` alors que tout est bien installé.
+
+### Ordre d'exécution
+
+Les notebooks se lancent dans cet ordre, car chacun produit un fichier utilisé par le suivant :
+
+| Ordre | Notebook | Rôle | Produit |
+|---|---|---|---|
+| 1 | `EDA.ipynb` | Analyse exploratoire, nettoyage, feature engineering exploratoire | `data/dataset_annulation_clean.csv`, figures |
+| 2 | `modele_final.ipynb` | Comparaison de trois modèles, optimisation de XGBoost, recalibration des probabilités, cadre de décision | `models/xgboost_optimise.joblib`, `models/calibrateur.joblib`, `data/dataset_entrainement.csv` |
+| 3 | `modele_email_exploratoire.ipynb` | Étude comparative de l'apport des signaux email (protocole A vs B, test de significativité) | figures |
+
+Pour lancer un notebook complet, utilisez la commande **Run All** une fois le noyau sélectionné.
+
+## Données
+
+Les notebooks lisent leurs données dans le dossier `data/`. Le nettoyage part d'une version anonymisée (sans email ni identifiant direct).
+
+| Fichier | Contenu |
+|---|---|
+| `data/dataset_anon.csv` | Jeu brut anonymisé, point de départ de l'analyse exploratoire |
+| `data/dataset_annulation_clean.csv` | Jeu nettoyé, produit par `EDA.ipynb` |
+| `data/dataset_entrainement.csv` | Jeu final avec features dérivées, produit par `modele_final.ipynb` |
+| `data/sample_dataset.csv` | Échantillon léger pour la démonstration |
+
+Le volume analysé est de 310 862 dossiers, pour un taux d'annulation de 7,27 pour cent.
+
+Ces fichiers contiennent des données commerciales réelles de Maeva. Ils sont couverts par un accord de confidentialité et ne doivent pas être diffusés en dehors du cadre de l'évaluation académique.
+
+## Structure du dossier
+
+```
+memoire_M2/
+├── EDA.ipynb                        Analyse exploratoire et nettoyage
+├── modele_final.ipynb                  Modélisation, optimisation, calibration, décision
+├── modele_email_exploratoire.ipynb  Étude de l'apport des signaux email
+├── requirements.txt                 Dépendances Python
+├── data/                            Jeux de données (confidentiels)
+├── models/                          Modèle et calibrateur sérialisés
+└── figures/                         Graphiques générés par les notebooks
 ```
 
-Produit `data/dataset_annulation.csv`. Une version anonymisée (`_anon.csv`) est créée pour le travail en local.
+## Principaux résultats
 
-### 2. Analyse exploratoire
-
-Ouvrir `eda_annulation.ipynb` dans VSCode (extensions Python + Jupyter), sélectionner le kernel `.venv`, exécuter les cellules. Les graphiques sont sauvegardés dans `figures/`.
-
-### 3. Modélisation
-
-Ouvrir `modelisation_annulation.ipynb`. Au programme :
-- feature engineering (sélection, limitation de cardinalité, pipeline de préprocessing) ;
-- trois modèles comparés : **Régression Logistique → Random Forest → XGBoost** ;
-- évaluation orientée déséquilibre (**PR-AUC**, rappel, courbes ROC & Précision-Rappel) ;
-- interprétabilité **SHAP** ;
-- **stratégie en deux temps** : modèle global puis modèle ciblé sur le sous-ensemble CRM.
-
----
-
-## Méthodologie en bref
-
-1. **Modèle global** (tous dossiers) — porté par les variables structurelles (`cond_annulation`, `canal`). Livrable de scoring opérationnel.
-2. **Analyse ciblée** (`est_dans_crm = 1`) — sur les contacts disposant d'un historique email, pour mesurer l'apport réel de l'engagement CRM (présenté comme exploratoire, l'historique email Batch ne couvrant que 7 mois).
-
----
+- Le modèle retenu est un XGBoost intégré dans un pipeline scikit-learn (préprocessing embarqué), optimisé par recherche aléatoire avec validation croisée.
+- Sur le jeu de test, il obtient une aire sous la courbe ROC de 0,76 et une aire sous la courbe précision rappel de 0,26, soit environ 3,6 fois la référence aléatoire.
+- Les probabilités brutes étant trop élevées à cause de la pondération de la classe minoritaire, elles sont recalibrées par régression isotonique. Le score de Brier passe ainsi de 0,17 à 0,06.
+- L'étude comparative montre que les signaux d'engagement email apportent un gain faible et non significatif une fois le modèle structurel complet. Les variables structurelles (assurance, fidélité, canal, anticipation) restent déterminantes.
 
 ## Stack technique
 
-`Python` · `pandas` · `scikit-learn` · `XGBoost` · `SHAP` · `BigQuery` · `VSCode`
+Python, pandas, scikit-learn, XGBoost, SHAP, imbalanced-learn, Matplotlib, seaborn.
 
----
+## Auteur
 
-## Limites assumées
+**Hady Coulibaly**, Master 2 Data et Intelligence Artificielle.
 
-- Historique email limité à 7 mois (≈ 9,3 % des dossiers couverts).
-- Biais de sélection du sous-ensemble CRM (population engagée).
-- Variables structurelles dominantes : la valeur du modèle réside dans la priorisation fine et l'identification des annulations évitables, non dans la redécouverte de règles métier connues.
-
----
-
-*Auteur : Hady Coulibaly — Mastère 2 DIA Paris · Données arrêtées à juin 2026.*
+Projet académique. Les données réelles restent soumises à l'accord de confidentialité Maeva.
